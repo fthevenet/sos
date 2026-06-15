@@ -6,6 +6,8 @@
 #
 # See the LICENSE file in the source distribution for further information.
 
+import os
+import pwd
 from sos.report.plugins import PluginOpt, Plugin, IndependentPlugin
 
 
@@ -37,26 +39,15 @@ class Jvm(Plugin, IndependentPlugin):
             for jvm in jvms['output'].splitlines()[1:]:
                 pid = jvm.split()
                 if pid[1] != 'jdk.jcmd/sun.tools.jcmd.JCmd':
-                    uname = self.target_process_user_name(pid[0])
-                    # Retrieve the user for the target JVM to run `jcmd`
-                    # as, or it may fail to connect to the target VM.
-                    if uname != "":
-                        for cmd in cmds:
-                            self.add_cmd_output([f'/usr/bin/jcmd {pid[0]} {cmd}'],
-                                                suggest_filename=f'{pid[0]}_{pid[1]}_{cmd}',
-                                                runas=uname,
-                                                timeout=30)
+                    # Run `jcmd` as the same  user as the target process, or it may be unable to attach to it.
+                    uname = pwd.getpwuid(os.stat(f'/proc/{pid[0]}').st_uid).pw_name
+                    for cmd in cmds:
+                        self.add_cmd_output([f'/usr/bin/jcmd {pid[0]} {cmd}'],
+                                            suggest_filename=f'{pid[0]}_{pid[1]}_{cmd}',
+                                            runas=uname,
+                                            timeout=30)
 
-    def target_process_user_name(self, pid: str):
-        stat = self.exec_cmd(f'stat -c "%u" /proc/{pid}')
-        if stat['status'] == 0:
-            uid = stat['output'].strip()
-            id = self.exec_cmd(f'id -un {uid}')
-            if id['status'] == 0:
-                return id['output'].strip()
-        return ""
-
-    def sanitize_commands(self, cmds: str):
+    def sanitize_commands(self, cmds: str) -> list[str]:
         valid_cmds = ('Compiler.CodeHeap_Analytics',
                       'Compiler.codecache',
                       'Compiler.codelist',
