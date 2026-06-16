@@ -29,6 +29,8 @@ class Jvm(Plugin, IndependentPlugin):
 
     # jcmd commands to run by default
     default_cmds = {'VM.version', 'VM.info', 'System.map'}
+    # jcmd commands that should *not* run in the context of sos report
+    disallowed_cmds = {'GC.run', 'System.dump_map', 'Thread.dump_to_file', 'GC.heap_dump'}
 
     option_list = [
         PluginOpt('extra_cmds', default='',
@@ -47,30 +49,27 @@ class Jvm(Plugin, IndependentPlugin):
                 main_class = proc_info[1]
                 self._log_info(main_class)
                 if main_class != 'jdk.jcmd/sun.tools.jcmd.JCmd':
-                    # Run `jcmd` as the same  user as the target process,
-                    # or it may be unable to attach to it.
+                    # Get target process user to run jcmd as (or attaching to the VM may fail).
                     user_id = os.stat(f'/proc/{pid}').st_uid
                     user_name = pwd.getpwuid(user_id).pw_name
-
-                    # Get a list of commands supported by the target JVM
-                    # to sanitize user input for the `jvm.extra_cmds` option.
+                    # Get a list of commands supported by the target JVM to sanitize user input.
                     jcmd_help_output = self.exec_cmd(f'/usr/bin/jcmd {pid} help',
                                                      runas=user_name,
                                                      timeout=self.get_option('jcmd_timeout'))
                     if jcmd_help_output['status'] == 0:
-                        target_vm_supported_cmds = jcmd_help_output['output'].splitlines()[2:]
-                        for cmd in self.default_cmds.union(extra_cmds):
-                            if cmd in target_vm_supported_cmds:
-                                self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
-                                                    suggest_filename=f'{pid}_{main_class}_{cmd}',
-                                                    runas=user_name,
-                                                    timeout=self.get_option('jcmd_timeout'))
-                            else:
-                                self._log_warn(f'{cmd} is not a valid jcmd command or is not supported by target JVM')
+                        supported_cmds = set(jcmd_help_output['output'].splitlines()[2:])
+                        for cmd in (self.default_cmds
+                            .union(extra_cmds)
+                            .difference(self.disallowed_cmds)
+                            .intersection(supported_cmds)):
+                            self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
+                                                suggest_filename=f'{pid}_{main_class}_{cmd}',
+                                                runas=user_name,
+                                                timeout=self.get_option('jcmd_timeout'))
                     else:
                         self._log_error(
                             f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output['status']}')
         else:
             self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output['status']}')
 
-    # vim: set et ts=4 sw=4 :
+# vim: set et ts=4 sw=4 :
