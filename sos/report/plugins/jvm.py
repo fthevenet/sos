@@ -27,13 +27,15 @@ class Jvm(Plugin, IndependentPlugin):
     profiles = ('java',)
     commands = ('jcmd',)
 
+    # jcmd commands to run by default
+    default_cmds = ['VM.info', 'System.map']
+
     option_list = [
-        PluginOpt('extraCmds', default='',
+        PluginOpt('extra_cmds', default='',
                   desc='Extra jcmd commands to run for all running JVMs, separated by a space')
     ]
 
     def setup(self):
-        cmds = ['VM.info', 'System.map'] + self.get_option('extraCmds').split()
         jcmd_list_output = self.collect_cmd_output('jcmd -l')
         if jcmd_list_output['status'] == 0:
             for jvm in jcmd_list_output['output'].splitlines():
@@ -48,14 +50,13 @@ class Jvm(Plugin, IndependentPlugin):
                     user_name = pwd.getpwuid(user_id).pw_name
 
                     # Get a list of commands supported by the target JVM
-                    # to sanitize user input for the `jvm.extraCmds` option.
-                    jcmd_help_output = self.collect_cmd_output(f'/usr/bin/jcmd {pid} help',
-                                                               suggest_filename=f'{pid}_{main_class}_help',
-                                                               runas=user_name,
-                                                               timeout=30)
+                    # to sanitize user input for the `jvm.extra_cmds` option.
+                    jcmd_help_output = self.exec_cmd(f'/usr/bin/jcmd {pid} help',
+                                                     runas=user_name,
+                                                     timeout=30)
                     if jcmd_help_output['status'] == 0:
                         target_vm_supported_cmds = jcmd_help_output['output'].splitlines()[2:]
-                        for cmd in cmds:
+                        for cmd in self.default_cmds + self.get_option('extra_cmds').split():
                             if cmd in target_vm_supported_cmds:
                                 self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
                                                     suggest_filename=f'{pid}_{main_class}_{cmd}',
