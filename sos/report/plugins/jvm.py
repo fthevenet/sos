@@ -28,7 +28,7 @@ class Jvm(Plugin, IndependentPlugin):
     commands = ('jcmd',)
 
     # jcmd commands to run by default
-    default_cmds = ['VM.info', 'System.map']
+    default_cmds = {'VM.version', 'VM.info', 'System.map'}
 
     option_list = [
         PluginOpt('extra_cmds', default='',
@@ -40,6 +40,7 @@ class Jvm(Plugin, IndependentPlugin):
     def setup(self):
         jcmd_list_output = self.collect_cmd_output('jcmd -l')
         if jcmd_list_output['status'] == 0:
+            extra_cmds = set(self.get_option('extra_cmds').split())
             for jvm in jcmd_list_output['output'].splitlines():
                 proc_info = jvm.split()
                 pid = proc_info[0]
@@ -58,7 +59,7 @@ class Jvm(Plugin, IndependentPlugin):
                                                      timeout=self.get_option('jcmd_timeout'))
                     if jcmd_help_output['status'] == 0:
                         target_vm_supported_cmds = jcmd_help_output['output'].splitlines()[2:]
-                        for cmd in self.default_cmds + self.get_option('extra_cmds').split():
+                        for cmd in self.default_cmds.union(extra_cmds):
                             if cmd in target_vm_supported_cmds:
                                 self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
                                                     suggest_filename=f'{pid}_{main_class}_{cmd}',
