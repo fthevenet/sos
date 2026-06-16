@@ -33,83 +33,40 @@ class Jvm(Plugin, IndependentPlugin):
     ]
 
     def setup(self):
-        cmds = ['VM.info', 'System.map'] + self.sanitize_commands(self.get_option('extraCmds'))
-        jvms = self.collect_cmd_output('jcmd -l')
-        if jvms['status'] == 0:
-            for jvm in jvms['output'].splitlines()[1:]:
-                pid = jvm.split()
-                if pid[1] != 'jdk.jcmd/sun.tools.jcmd.JCmd':
-                    # Run `jcmd` as the same  user as the target process, or it may be unable to attach to it.
-                    uname = pwd.getpwuid(os.stat(f'/proc/{pid[0]}').st_uid).pw_name
-                    for cmd in cmds:
-                        self.add_cmd_output([f'/usr/bin/jcmd {pid[0]} {cmd}'],
-                                            suggest_filename=f'{pid[0]}_{pid[1]}_{cmd}',
-                                            runas=uname,
-                                            timeout=30)
+        cmds = ['VM.info', 'System.map'] + self.get_option('extraCmds').split()
+        jcmd_list_output = self.collect_cmd_output('jcmd -l')
+        if jcmd_list_output['status'] == 0:
+            for jvm in jcmd_list_output['output'].splitlines():
+                proc_info = jvm.split()
+                pid = proc_info[0]
+                main_class = proc_info[1]
+                self._log_info(main_class)
+                if main_class != 'jdk.jcmd/sun.tools.jcmd.JCmd':
+                    # Run `jcmd` as the same  user as the target process,
+                    # or it may be unable to attach to it.
+                    user_id = os.stat(f'/proc/{pid}').st_uid
+                    user_name = pwd.getpwuid(user_id).pw_name
 
-    def sanitize_commands(self, cmds: str) -> list[str]:
-        valid_cmds = ('Compiler.CodeHeap_Analytics',
-                      'Compiler.codecache',
-                      'Compiler.codelist',
-                      'Compiler.directives_add',
-                      'Compiler.directives_clear',
-                      'Compiler.directives_print',
-                      'Compiler.directives_remove',
-                      'Compiler.memory',
-                      'Compiler.perfmap',
-                      'Compiler.queue',
-                      'GC.class_histogram',
-                      'GC.finalizer_info',
-                      'GC.heap_dump',
-                      'GC.heap_info',
-                      'GC.run',
-                      'GC.run_finalization',
-                      'JFR.check',
-                      'JFR.configure',
-                      'JFR.dump',
-                      'JFR.start',
-                      'JFR.stop',
-                      'JFR.view',
-                      'JVMTI.agent_load',
-                      'JVMTI.data_dump',
-                      'ManagementAgent.start',
-                      'ManagementAgent.start_local',
-                      'ManagementAgent.status',
-                      'ManagementAgent.stop',
-                      'System.dump_map',
-                      'System.map',
-                      'System.native_heap_info',
-                      'System.trim_native_heap',
-                      'Thread.dump_to_file',
-                      'Thread.print',
-                      'Thread.vthread_pollers',
-                      'Thread.vthread_scheduler',
-                      'VM.cds',
-                      'VM.class_hierarchy',
-                      'VM.classes',
-                      'VM.classloader_stats',
-                      'VM.classloaders',
-                      'VM.command_line',
-                      'VM.dynlibs',
-                      'VM.events',
-                      'VM.flags',
-                      'VM.info',
-                      'VM.log',
-                      'VM.metaspace',
-                      'VM.native_memory',
-                      'VM.set_flag',
-                      'VM.stringtable',
-                      'VM.symboltable',
-                      'VM.system_properties',
-                      'VM.systemdictionary',
-                      'VM.uptime',
-                      'VM.version')
-        output = []
-        for cmd in cmds.split():
-            if cmd in valid_cmds:
-                output.append(cmd)
-            else:
-                self._log_warn(f'{cmd} is not a valid jcmd command')
-        return output
+                    # Get a list of commands supported by the target JVM
+                    # to sanitize user input for the `jvm.extraCmds` option.
+                    jcmd_help_output = self.collect_cmd_output(f'/usr/bin/jcmd {pid} help',
+                                                               suggest_filename=f'{pid}_{main_class}_help',
+                                                               runas=user_name,
+                                                               timeout=30)
+                    if jcmd_help_output['status'] == 0:
+                        target_vm_supported_cmds = jcmd_help_output['output'].splitlines()[2:]
+                        for cmd in cmds:
+                            if cmd in target_vm_supported_cmds:
+                                self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
+                                                    suggest_filename=f'{pid}_{main_class}_{cmd}',
+                                                    runas=user_name,
+                                                    timeout=30)
+                            else:
+                                self._log_warn(f'{cmd} is not a valid jcmd command or is not supported by target JVM')
+                    else:
+                        self._log_error(
+                            f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output['status']}')
+        else:
+            self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output['status']}')
 
     # vim: set et ts=4 sw=4 :
