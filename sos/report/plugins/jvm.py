@@ -33,7 +33,7 @@ class Jvm(Plugin, IndependentPlugin):
     option_list = [
         PluginOpt('extra_cmds', default='',
                   desc='Extra jcmd commands to run for all running JVMs, separated by a space'),
-        PluginOpt('jcmd_timeout', default=30,
+        PluginOpt('jcmd_timeout', default=10,
                   desc='Timeout (in seconds) for each individual jcmd invocation')
     ]
 
