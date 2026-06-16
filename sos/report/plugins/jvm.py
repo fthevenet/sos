@@ -32,7 +32,9 @@ class Jvm(Plugin, IndependentPlugin):
 
     option_list = [
         PluginOpt('extra_cmds', default='',
-                  desc='Extra jcmd commands to run for all running JVMs, separated by a space')
+                  desc='Extra jcmd commands to run for all running JVMs, separated by a space'),
+        PluginOpt('jcmd_timeout', default=30,
+                  desc='Timeout (in seconds) for each individual jcmd invocation')
     ]
 
     def setup(self):
@@ -53,7 +55,7 @@ class Jvm(Plugin, IndependentPlugin):
                     # to sanitize user input for the `jvm.extra_cmds` option.
                     jcmd_help_output = self.exec_cmd(f'/usr/bin/jcmd {pid} help',
                                                      runas=user_name,
-                                                     timeout=30)
+                                                     timeout=self.get_option('jcmd_timeout'))
                     if jcmd_help_output['status'] == 0:
                         target_vm_supported_cmds = jcmd_help_output['output'].splitlines()[2:]
                         for cmd in self.default_cmds + self.get_option('extra_cmds').split():
@@ -61,7 +63,7 @@ class Jvm(Plugin, IndependentPlugin):
                                 self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
                                                     suggest_filename=f'{pid}_{main_class}_{cmd}',
                                                     runas=user_name,
-                                                    timeout=30)
+                                                    timeout=self.get_option('jcmd_timeout'))
                             else:
                                 self._log_warn(f'{cmd} is not a valid jcmd command or is not supported by target JVM')
                     else:
