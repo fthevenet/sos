@@ -72,4 +72,15 @@ class Jvm(Plugin, IndependentPlugin):
         else:
             self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output['status']}')
 
+    def postproc(self):
+        # Obfuscate the values of all java properties passed to the JVM
+        # with '-D' on the command line in the output for VM.info, as they
+        # may contain secrets (and we cannot really know which ones do).
+        self.do_cmd_output_sub(
+            "VM.info",
+            r'-D([\w\d_.]*)=("([^"]*)"|\S+)',
+            r'-D\1=********'
+        )
+
+
 # vim: set et ts=4 sw=4 :
