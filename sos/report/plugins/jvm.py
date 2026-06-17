@@ -66,6 +66,8 @@ class Jvm(Plugin, IndependentPlugin):
         # Obfuscate the values of all java properties passed to the JVM
         # with '-D' on the command line in the output for VM.info, as they
         # may contain secrets (and we cannot really know which ones do).
+        # e.g.:
+        # "-Dservice.api.token=012-ABC-345" => "-Dservice.api.token=********"
         self.do_cmd_output_sub(
             "VM.info",
             r'-D([\w\d_.]*)=("([^"]*)"|\S+)',
