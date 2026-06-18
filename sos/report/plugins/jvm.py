@@ -13,13 +13,33 @@ from sos.report.plugins import PluginOpt, Plugin, IndependentPlugin
 
 class Jvm(Plugin, IndependentPlugin):
     """
-    This plugin collects information about instances of the Java Virtual Machine
-    running on the system at the time of the report.
+    This plugin collects information about all instances of the Java
+    Virtual Machine running on the system. that are based on the "Hotspot"
+    JVM (as made available by the OpenJDK project).
 
-    This information is captured by using the 'jcmd' JDK utility with a set number
-    of predefined commands.
+    To achieve this, it uses the 'jcmd' utility that is bundled as part of
+    all OpenJDK version currently supported. The plugin makes a first call
+    to `jcmd -l` to list all running JVMs, then attempt to call `jcmd
+    VM.version`, `jcmd VM.info` and  `jcmd System.map` for all detected
+    processes.
 
-    If the 'clean' command is provided to
+    Because not all versions of the JVM support all of these commands, the
+    plugin retrieves a list of supported operations for each of those (using
+    `jcmd $pid help`) and only invokes the commands that the target
+    supports.
+
+    The plugin relies on a copy of the jcmd utility being available on the
+    path, as part of OpenJDK 1.8 of higher. It does not matter that the
+    version for jcmd available on the path is different from that of the
+    JVMs it is used to query.
+
+    The plugin will attempt to sanitize the output of the `VM.info` by
+    pruning out the values for the properties passed to the JVM using the
+    `-D` argument on the command line.
+    These properties may be used to communicate secrets to an instance on
+    startup, but because they can be user defined, it is not realistic to
+    hope catch those using simple heuristics; the safe approach is to
+    obfuscate the values for all of them.
     """
 
     short_desc = 'Collect information about running Java Virtual Machines'
