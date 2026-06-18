@@ -78,9 +78,9 @@ class Jvm(Plugin, IndependentPlugin):
                                                 timeout=self.get_option('jcmd_timeout'))
                     else:
                         self._log_error(
-                            f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output['status']}')
+                            f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output["status"]}')
         else:
-            self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output['status']}')
+            self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output["status"]}')
 
     def postproc(self):
         # Obfuscate the values of all java properties passed to the JVM
