@@ -56,6 +56,7 @@ class Jvm(Plugin, IndependentPlugin):
     def setup(self):
         jcmd_list_output = self.collect_cmd_output('jcmd -l')
         if jcmd_list_output['status'] == 0:
+            timeout = self.get_option('jcmd_timeout')
             for jvm in jcmd_list_output['output'].splitlines():
                 proc_info = jvm.split()
                 pid = proc_info[0]
@@ -68,14 +69,14 @@ class Jvm(Plugin, IndependentPlugin):
                     # Get a list of commands supported by the target VM.
                     jcmd_help_output = self.exec_cmd(f'/usr/bin/jcmd {pid} help',
                                                      runas=user_name,
-                                                     timeout=self.get_option('jcmd_timeout'))
+                                                     timeout=timeout)
                     if jcmd_help_output['status'] == 0:
                         supported_cmds = set(jcmd_help_output['output'].splitlines()[2:])
                         for cmd in {'VM.version', 'VM.info', 'System.map'}.intersection(supported_cmds):
                             self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
                                                 suggest_filename=f'{pid}_{main_class}_{cmd}',
                                                 runas=user_name,
-                                                timeout=self.get_option('jcmd_timeout'))
+                                                timeout=timeout)
                     else:
                         self._log_error(
                             f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output["status"]}')
