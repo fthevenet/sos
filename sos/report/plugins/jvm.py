@@ -18,7 +18,7 @@ class Jvm(Plugin, IndependentPlugin):
     JVM (as made available by the OpenJDK project).
 
     To achieve this, it uses the 'jcmd' utility that is bundled as part of
-    all OpenJDK version currently supported. The plugin makes a first call
+    all OpenJDK versions currently supported. The plugin makes a first call
     to `jcmd -l` to list all running JVMs, then attempt to call `jcmd
     VM.version`, `jcmd VM.info` and  `jcmd System.map` for all detected
     processes.
@@ -50,7 +50,8 @@ class Jvm(Plugin, IndependentPlugin):
 
     option_list = [
         PluginOpt('jcmd_timeout', default=10,
-                  desc='Timeout (in seconds) for each individual jcmd invocation')
+                  desc='Timeout (in seconds) for each individual jcmd'
+                       ' invocation')
     ]
 
     def setup(self):
@@ -63,25 +64,34 @@ class Jvm(Plugin, IndependentPlugin):
                 main_class = proc_info[1]
                 self._log_info(main_class)
                 if main_class != 'jdk.jcmd/sun.tools.jcmd.JCmd':
-                    # Get target process user to run jcmd as (or attaching to the VM may fail).
+                    # Get target process user to run jcmd as
+                    # (or attaching to the VM may fail).
                     user_id = os.stat(f'/proc/{pid}').st_uid
                     user_name = pwd.getpwuid(user_id).pw_name
                     # Get a list of commands supported by the target VM.
-                    jcmd_help_output = self.exec_cmd(f'/usr/bin/jcmd {pid} help',
-                                                     runas=user_name,
-                                                     timeout=timeout)
+                    jcmd_help_output = self.exec_cmd(
+                        f'/usr/bin/jcmd {pid} help',
+                        runas=user_name,
+                        timeout=timeout)
                     if jcmd_help_output['status'] == 0:
-                        supported_cmds = set(jcmd_help_output['output'].splitlines()[2:])
-                        for cmd in {'VM.version', 'VM.info', 'System.map'}.intersection(supported_cmds):
-                            self.add_cmd_output([f'/usr/bin/jcmd {pid} {cmd}'],
-                                                suggest_filename=f'{pid}_{main_class}_{cmd}',
-                                                runas=user_name,
-                                                timeout=timeout)
+                        supported_cmds = set(
+                            jcmd_help_output['output'].splitlines()[2:])
+                        for cmd in {'VM.version',
+                                    'VM.info',
+                                    'System.map'}.intersection(supported_cmds):
+                            self.add_cmd_output([
+                                f'/usr/bin/jcmd {pid} {cmd}'
+                            ], suggest_filename=f'{pid}_{main_class}_{cmd}',
+                                runas=user_name,
+                                timeout=timeout)
                     else:
                         self._log_error(
-                            f'Failed to retrieve command list for "{pid}" (status={jcmd_help_output["status"]}')
+                            f'Failed to retrieve command list for "{pid}"'
+                            f' (status={jcmd_help_output["status"]}')
         else:
-            self._log_error(f'Failed to retrieve a list of running JVMs (status={jcmd_list_output["status"]}')
+            self._log_error(
+                f'Failed to retrieve a list of running JVMs'
+                f' (status={jcmd_list_output["status"]}')
 
     def postproc(self):
         # Obfuscate the values of all java properties passed to the JVM
